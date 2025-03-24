@@ -1,111 +1,94 @@
 import streamlit as st
 import pandas as pd
-import io
-from fpdf import FPDF
+import os
 
-def main():
-    # Logo oben rechts anzeigen
-    logo_path = "Logo_namowo_blau.svg"
-    st.sidebar.image(logo_path, use_container_width=True)
-    
-    st.markdown("<h1 style='color:#193B4D; font-weight:bold; font-family:sans-serif;'>Maßnahmendatenbank</h1>", unsafe_allow_html=True)
-    
-    # Excel-Datei laden
-    file_path = "Maßnahmen.xlsx"  # Datei liegt im Repository
-    df = pd.read_excel(file_path)
-    
-    
-    # Sicherstellen, dass die Spalte 'text' existiert und keine NaN-Werte enthält
-    if 'text' not in df.columns or 'kategorie' not in df.columns:
-        st.error("Benötigte Spalten fehlen!")
-        return
-    
-    df['text'] = df['text'].fillna("Kein Text verfügbar")
-    
-    # Annahme: Die relevanten Spalten heißen 'kategorie', 'name' (Überschrift) und 'text' (Text)
-    texte = df[['name', 'kategorie', 'text']].rename(columns={'name': 'überschrift'})
-    
-    ausgewählte_texte = {}
-    
-    # Gruppieren nach Kategorie
-    kategorien = texte['kategorie'].unique()
-    for kategorie in kategorien:
-        with st.expander(kategorie):
-            kategorietexte = texte[texte['kategorie'] == kategorie]
-            for idx, text in kategorietexte.iterrows():
-                key = f"toggle_{idx}"  # Eindeutiger Schlüssel für jedes Toggle-Element
-                ausgewählte_texte[key] = st.toggle(text['überschrift'], key=key)
-    
-    if st.button("HTML exportieren"):
-        html_content = """
-        <html>
-        <head>
-            <meta charset='utf-8'>
-            <style>
-                body { font-family: 'Arial', sans-serif; color: #333333; line-height: 1.6; }
-                h1 { color: #193B4D; font-size: 28px; font-weight: bold; }
-                h2 { color: #E05A47; font-size: 24px; font-weight: bold; }
-                p { font-size: 16px; }
-            </style>
-        </head>
-        <body>
-        <img src='Logo_namowo_blau.svg' style='position: absolute; top: 10px; right: 10px; height: 50px;'>
-        """
-        
-        for kategorie in kategorien:
-            html_content += f"<section><h1>{kategorie}</h1>"
-            kategorietexte = texte[texte['kategorie'] == kategorie]
-            for idx, text in kategorietexte.iterrows():
-                if ausgewählte_texte.get(f"toggle_{idx}"):
-                    html_content += f"<h2>{text['überschrift']}</h2><p>{text['text']}</p>"
-            html_content += "</section>"
-        
-        html_content += "</body></html>"
-        
-        output = io.BytesIO()
-        output.write(html_content.encode("utf-8"))
-        output.seek(0)
-        
-        st.download_button(
-            label="HTML-Datei herunterladen",
-            data=output,
-            file_name="export.html",
-            mime="text/html"
-        )
-    
-    if st.button("PDF exportieren"):
-        pdf = FPDF()
-        pdf.set_auto_page_break(auto=True, margin=15)
-        pdf.add_page()
-        pdf.set_font("Arial", style='B', size=16)
-        pdf.cell(200, 10, "Maßnahmen-Export", ln=True, align='C')
-        pdf.ln(10)
-        
-        for kategorie in kategorien:
-            pdf.set_font("Arial", style='B', size=14)
-            pdf.cell(200, 10, kategorie, ln=True)
-            pdf.ln(5)
-            
-            kategorietexte = texte[texte['kategorie'] == kategorie]
-            for idx, text in kategorietexte.iterrows():
-                if ausgewählte_texte.get(f"toggle_{idx}"):
-                    pdf.set_font("Arial", style='B', size=12)
-                    pdf.cell(200, 10, text['überschrift'], ln=True)
-                    pdf.set_font("Arial", size=10)
-                    pdf.multi_cell(0, 10, text['text'])
-                    pdf.ln(5)
-        
-        pdf_output = io.BytesIO()
-        pdf_bytes = pdf.output(dest='S').encode('latin1')  # Konvertierung für Sonderzeichen
-        pdf_output.write(pdf_bytes)
-        pdf_output.seek(0)
-        
-        st.download_button(
-            label="PDF-Datei herunterladen",
-            data=pdf_output,
-            file_name="export.pdf",
-            mime="application/pdf"
-        )
+# Titel der Anwendung
+st.title("Analysefaktoren - Interaktive Auswertung")
 
-if __name__ == "__main__":
-    main()
+# Eingabefeld für den Projektnamen
+project_name = st.text_input("Projektname eingeben:", "")
+if not project_name:
+    st.warning("Bitte einen Projektnamen eingeben, um die Datei speichern zu können.")
+    st.stop()
+
+# Datei einlesen
+file_path = "Analysefaktoren.xlsx"
+df = pd.read_excel(file_path)
+
+# Sicherstellen, dass die Spalten existieren
+df["Antwort"] = df.get("Antwort", "")
+df["Umsetzbar"] = df.get("Umsetzbar", "")
+df["Schwierigkeitsgrad"] = df.get("Schwierigkeitsgrad", "")
+
+# Zustand für die abgeschlossene Analyse verwalten
+if "analysis_done" not in st.session_state:
+    st.session_state.analysis_done = False
+
+# Analyse-Abschnitt
+st.header("Analyse")
+categories = df["Kategorie"].unique()
+responses = {}
+
+for category in categories:
+    with st.expander(category):
+        category_df = df[df["Kategorie"] == category]
+        
+        for index, row in category_df.iterrows():
+            st.write(f"**{row['Überschrift']}**")
+            st.write(row['Frage'])
+            toggle = st.toggle("", key=f"analyse_{index}", value=(row["Antwort"] == "ja"))
+            responses[row.name] = "ja" if toggle else "nein"
+
+# Speichern der Antworten aus der Analyse
+for idx, answer in responses.items():
+    df.at[idx, "Antwort"] = answer
+
+# Button für Analyse abschließen
+analysis_file = f"{project_name}_Analyseergebnisse.xlsx"
+if st.button("Analyse abschließen"):
+    df.to_excel(analysis_file, index=False)
+    st.session_state.analysis_done = True
+    st.success(f"Analyseergebnisse gespeichert als {analysis_file}")
+
+# Maßnahmen-Abschnitt (nur sichtbar, wenn Analyse abgeschlossen ist)
+if st.session_state.analysis_done and os.path.exists(analysis_file):
+    st.header("Maßnahmen")
+    df_analysis = pd.read_excel(analysis_file)
+    filtered_df = df_analysis[df_analysis["Antwort"] == "nein"]
+    measures = {}
+    difficulties = {}
+    
+    for category in categories:
+        category_df = filtered_df[filtered_df["Kategorie"] == category]
+        if not category_df.empty:
+            with st.expander(category):
+                for index, row in category_df.iterrows():
+                    st.write(f"**{row['Überschrift']}**")
+                    st.write(row['Frage'])
+                    toggle = st.toggle("", key=f"massnahme_{index}", value=False)
+                    measures[row.name] = "ja" if toggle else "nein"
+                    difficulty = st.select_slider("Schwierigkeitsgrad", options=["Leicht", "Mittel", "Schwer"], key=f"difficulty_{index}")
+                    difficulties[row.name] = difficulty
+    
+    # Speichern der Maßnahmen
+    if st.button("Speichern & Exportieren"):
+        for idx, answer in measures.items():
+            df_analysis.at[idx, "Umsetzbar"] = answer
+        for idx, difficulty in difficulties.items():
+            df_analysis.at[idx, "Schwierigkeitsgrad"] = difficulty
+        export_filename = f"{project_name}_Finale_Analysefaktoren.xlsx"
+        df_analysis.to_excel(export_filename, index=False)
+        st.success(f"Datei gespeichert als {export_filename}")
+        with open(export_filename, "rb") as file:
+            st.download_button("📥 Datei herunterladen", file, file_name=export_filename)
+
+# Zurücksetzen der Antworten
+if st.button("Antworten zurücksetzen"):
+    df["Antwort"] = ""
+    df["Umsetzbar"] = ""
+    df["Schwierigkeitsgrad"] = ""
+    df.to_excel(file_path, index=False)
+    if os.path.exists(analysis_file):
+        os.remove(analysis_file)
+    st.session_state.analysis_done = False
+    st.rerun()
