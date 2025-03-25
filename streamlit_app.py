@@ -3,7 +3,7 @@ import pandas as pd
 import os
 
 # Titel der Anwendung
-st.title("Analysefaktoren - Interaktive Auswertung")
+st.title("Analyse Einzelhandelstandort")
 
 # Eingabefeld für den Projektnamen
 project_name = st.text_input("Projektname eingeben:", "")
