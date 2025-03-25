@@ -2,8 +2,11 @@ import streamlit as st
 import pandas as pd
 import os
 
+# Logo einfügen
+st.image("Logo_namowo_blau.svg", width=150)
+
 # Titel der Anwendung
-st.title("Analyse Einzelhandelstandort")
+st.title("Analysefaktoren - Interaktive Auswertung")
 
 # Eingabefeld für den Projektnamen
 project_name = st.text_input("Projektname eingeben:", "")
@@ -30,6 +33,7 @@ if "difficulty_state" not in st.session_state:
 
 # Analyse-Abschnitt
 st.header("Analyse")
+st.write("Wähle die Faktoren aus, die auf diesen Standort zutreffen.")
 categories = df["Kategorie"].unique()
 responses = {}
 
@@ -58,6 +62,7 @@ if st.button("Analyse abschließen"):
 # Maßnahmen-Abschnitt (nur sichtbar, wenn Analyse abgeschlossen ist)
 if st.session_state.analysis_done and os.path.exists(analysis_file):
     st.header("Maßnahmen")
+    st.write("Wähle hier die Maßnahmen aus, die an diesem Standort umsetzbar erscheinen und bewerte, wie hoch der Schwierigkeitsgrad für die Umsetzung ist.")
     df_analysis = pd.read_excel(analysis_file)
     filtered_df = df_analysis[df_analysis["Antwort"] == "nein"]
     
