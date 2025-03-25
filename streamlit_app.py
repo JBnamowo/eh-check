@@ -6,7 +6,7 @@ import os
 st.image("Logo_namowo_blau.svg", width=150)
 
 # Titel der Anwendung
-st.title("Analysefaktoren - Interaktive Auswertung")
+st.title("Analyse Einzelhandelsstandort")
 
 # Eingabefeld für den Projektnamen
 project_name = st.text_input("Projektname eingeben:", "")
