@@ -20,9 +20,13 @@ df["Antwort"] = df.get("Antwort", "")
 df["Umsetzbar"] = df.get("Umsetzbar", "")
 df["Schwierigkeitsgrad"] = df.get("Schwierigkeitsgrad", "")
 
-# Zustand für die abgeschlossene Analyse verwalten
+# Zustand für abgeschlossene Analyse und Maßnahmen verwalten
 if "analysis_done" not in st.session_state:
     st.session_state.analysis_done = False
+if "measures_state" not in st.session_state:
+    st.session_state.measures_state = {}
+if "difficulty_state" not in st.session_state:
+    st.session_state.difficulty_state = {}
 
 # Analyse-Abschnitt
 st.header("Analyse")
@@ -43,20 +47,19 @@ for category in categories:
 for idx, answer in responses.items():
     df.at[idx, "Antwort"] = answer
 
-# Button für Analyse abschließen
-analysis_file = f"{project_name}_Analyseergebnisse.xlsx"
+# Temporäre Zwischenspeicherung für Maßnahmen
+analysis_file = f"{project_name}_Analyseergebnisse_temp.xlsx"
+final_export_file = f"{project_name}_Finale_Analysefaktoren_temp.xlsx"
 if st.button("Analyse abschließen"):
     df.to_excel(analysis_file, index=False)
     st.session_state.analysis_done = True
-    st.success(f"Analyseergebnisse gespeichert als {analysis_file}")
+    st.success(f"Analyseergebnisse gespeichert")
 
 # Maßnahmen-Abschnitt (nur sichtbar, wenn Analyse abgeschlossen ist)
 if st.session_state.analysis_done and os.path.exists(analysis_file):
     st.header("Maßnahmen")
     df_analysis = pd.read_excel(analysis_file)
     filtered_df = df_analysis[df_analysis["Antwort"] == "nein"]
-    measures = {}
-    difficulties = {}
     
     for category in categories:
         category_df = filtered_df[filtered_df["Kategorie"] == category]
@@ -65,24 +68,30 @@ if st.session_state.analysis_done and os.path.exists(analysis_file):
                 for index, row in category_df.iterrows():
                     st.write(f"**{row['Überschrift']}**")
                     st.write(row['Frage'])
-                    toggle = st.toggle("", key=f"massnahme_{index}", value=False)
-                    measures[row.name] = "ja" if toggle else "nein"
-                    difficulty = st.select_slider("Schwierigkeitsgrad", options=["Leicht", "Mittel", "Schwer"], key=f"difficulty_{index}")
-                    difficulties[row.name] = difficulty
+                    toggle_key = f"massnahme_{index}"
+                    toggle_value = st.session_state.measures_state.get(toggle_key, False)
+                    toggle = st.toggle("", key=toggle_key, value=toggle_value)
+                    st.session_state.measures_state[toggle_key] = toggle
+                    
+                    difficulty_key = f"difficulty_{index}"
+                    if toggle:
+                        difficulty_value = st.session_state.difficulty_state.get(difficulty_key, "Leicht")
+                        difficulty = st.select_slider("Schwierigkeitsgrad", options=["Leicht", "Mittel", "Schwer"], key=difficulty_key, value=difficulty_value)
+                        st.session_state.difficulty_state[difficulty_key] = difficulty
+                    else:
+                        difficulty = ""
+                    
+                    df_analysis.at[row.name, "Umsetzbar"] = "ja" if toggle else "nein"
+                    df_analysis.at[row.name, "Schwierigkeitsgrad"] = difficulty
     
     # Speichern der Maßnahmen
     if st.button("Speichern & Exportieren"):
-        for idx, answer in measures.items():
-            df_analysis.at[idx, "Umsetzbar"] = answer
-        for idx, difficulty in difficulties.items():
-            df_analysis.at[idx, "Schwierigkeitsgrad"] = difficulty
-        export_filename = f"{project_name}_Finale_Analysefaktoren.xlsx"
-        df_analysis.to_excel(export_filename, index=False)
-        st.success(f"Datei gespeichert als {export_filename}")
-        with open(export_filename, "rb") as file:
-            st.download_button("📥 Datei herunterladen", file, file_name=export_filename)
+        df_analysis.to_excel(final_export_file, index=False)
+        st.success("Finale Analyse gespeichert")
+        with open(final_export_file, "rb") as file:
+            st.download_button("📥 Datei herunterladen", file, file_name=f"{project_name}_Finale_Analysefaktoren.xlsx")
 
-# Zurücksetzen der Antworten
+# Zurücksetzen der Antworten und Löschen temporärer Dateien
 if st.button("Antworten zurücksetzen"):
     df["Antwort"] = ""
     df["Umsetzbar"] = ""
@@ -90,5 +99,9 @@ if st.button("Antworten zurücksetzen"):
     df.to_excel(file_path, index=False)
     if os.path.exists(analysis_file):
         os.remove(analysis_file)
+    if os.path.exists(final_export_file):
+        os.remove(final_export_file)
     st.session_state.analysis_done = False
+    st.session_state.measures_state = {}
+    st.session_state.difficulty_state = {}
     st.rerun()
